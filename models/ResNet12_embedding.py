@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
+from dropblock import DropBlock
 
 # This ResNet network was designed following the practice of the following papers:
 # TADAM: Task dependent adaptive metric for improved few-shot learning (Oreshkin et al., in NIPS 2018) and
@@ -15,7 +16,7 @@ def conv3x3(in_planes, out_planes, stride=1):
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None, drop_rate=0.0):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, drop_rate=0.0, drop_block=False, block_size=1):
         super(BasicBlock, self).__init__()
         self.conv1 = conv3x3(inplanes, planes)
         self.bn1 = nn.BatchNorm2d(planes)
@@ -28,7 +29,14 @@ class BasicBlock(nn.Module):
         self.downsample = downsample
         self.stride = stride
         self.drop_rate = drop_rate
+        self.num_batches_tracked = 0
+        self.drop_block = drop_block
+        self.block_size = block_size
+        self.DropBlock = DropBlock(block_size=self.block_size)
+
     def forward(self, x):
+        self.num_batches_tracked += 1
+
         residual = x
 
         out = self.conv1(x)
@@ -47,9 +55,15 @@ class BasicBlock(nn.Module):
         out += residual
         out = self.relu(out)
         out = self.maxpool(out)
+        
         if self.drop_rate > 0:
-            out = F.dropout(out, p=self.drop_rate, training=self.training)
-
+            if self.drop_block == True:
+                feat_size = out.size()[2]
+                keep_rate = max(1.0 - self.drop_rate / (20*2000) * (self.num_batches_tracked), 1.0 - self.drop_rate)
+                gamma = (1 - keep_rate) / self.block_size**2 * feat_size**2 / (feat_size - self.block_size + 1)**2
+                out = self.DropBlock(out, gamma=gamma)
+            else:
+                out = F.dropout(out, p=self.drop_rate, training=self.training, inplace=True)
 
         return out
 
@@ -61,9 +75,9 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
 
         self.layer1 = self._make_layer(block, 64, stride=2, drop_rate=drop_rate)
-        self.layer2 = self._make_layer(block, 128, stride=2, drop_rate=drop_rate)
-        self.layer3 = self._make_layer(block, 256, stride=2, drop_rate=drop_rate)
-        self.layer4 = self._make_layer(block, 512, stride=2, drop_rate=drop_rate)
+        self.layer2 = self._make_layer(block, 160, stride=2, drop_rate=drop_rate)
+        self.layer3 = self._make_layer(block, 320, stride=2, drop_rate=drop_rate, drop_block=True, block_size=5)
+        self.layer4 = self._make_layer(block, 640, stride=2, drop_rate=drop_rate, drop_block=True, block_size=5)
         if avg_pool:
             self.avgpool = nn.AvgPool2d(5, stride=1)
         self.keep_prob = keep_prob
@@ -78,7 +92,7 @@ class ResNet(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def _make_layer(self, block, planes, stride=1, drop_rate=0.0):
+    def _make_layer(self, block, planes, stride=1, drop_rate=0.0, drop_block=False, block_size=1):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
@@ -88,7 +102,7 @@ class ResNet(nn.Module):
             )
 
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample, drop_rate))
+        layers.append(block(self.inplanes, planes, stride, downsample, drop_rate, drop_block, block_size))
         self.inplanes = planes * block.expansion
 
         return nn.Sequential(*layers)
