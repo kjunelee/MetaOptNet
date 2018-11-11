@@ -348,6 +348,23 @@ def MetaOptNetHead_SVM_WW(query, support, support_labels, n_way, n_shot, C_reg=0
       C_reg: a scalar. Represents the cost parameter C in SVM.
     Returns: a (tasks_per_batch, n_query, n_way) Tensor.
     """
+    """
+    Fits the support set with multi-class SVM and 
+    returns the classification score on the query set.
+    
+    This is the multi-class SVM presented in:
+    Support Vector Machines for Multi Class Pattern Recognition
+    (Weston and Watkins, ESANN 1999).
+    
+    Parameters:
+      query:  a (tasks_per_batch, n_query, d) Tensor.
+      support:  a (tasks_per_batch, n_support, d) Tensor.
+      support_labels: a (tasks_per_batch, n_support) Tensor.
+      n_way: a scalar. Represents the number of classes in a few-shot classification task.
+      n_shot: a scalar. Represents the number of support examples given per class.
+      C_reg: a scalar. Represents the cost parameter C in SVM.
+    Returns: a (tasks_per_batch, n_query, n_way) Tensor.
+    """
     tasks_per_batch = query.size(0)
     n_support = support.size(1)
     n_query = query.size(1)
@@ -357,71 +374,74 @@ def MetaOptNetHead_SVM_WW(query, support, support_labels, n_way, n_shot, C_reg=0
     assert(query.size(0) == support.size(0) and query.size(2) == support.size(2))
     assert(n_support == n_way * n_shot)      # n_support must equal to n_way * n_shot
 
+    #In theory, \alpha is an (n_support, n_way) matrix
+    #NOTE: In this implementation, we solve for a flattened vector of size (n_way*n_support)
+    #In order to turn it into a matrix, you must first reshape it into an (n_way, n_support) matrix
+    #then transpose it, resulting in (n_support, n_way) matrix
+    kernel_matrix = computeGramMatrix(support, support) + torch.ones(tasks_per_batch, n_support, n_support).cuda()
     
-    kernel_matrix = computeGramMatrix(support, support)
+    id_matrix_0 = torch.eye(n_way).expand(tasks_per_batch, n_way, n_way).cuda()
+    block_kernel_matrix = batched_kronecker(id_matrix_0, kernel_matrix)
     
-    block_kernel_matrix_mask = torch.arange(n_way).repeat(n_support)
-    block_kernel_matrix_mask = block_kernel_matrix_mask.reshape(n_support, n_way)
-    block_kernel_matrix_mask = block_kernel_matrix_mask.t()
-    block_kernel_matrix_mask = block_kernel_matrix_mask.reshape(n_way * n_support)
-    block_kernel_matrix_mask = block_kernel_matrix_mask.unsqueeze(0).expand(tasks_per_batch, n_way * n_support)
+    kernel_matrix_mask_x = support_labels.reshape(tasks_per_batch, n_support, 1).expand(tasks_per_batch, n_support, n_support)
+    kernel_matrix_mask_y = support_labels.reshape(tasks_per_batch, 1, n_support).expand(tasks_per_batch, n_support, n_support)
+    kernel_matrix_mask = (kernel_matrix_mask_x == kernel_matrix_mask_y).float()
     
+    block_kernel_matrix_inter = kernel_matrix_mask * kernel_matrix
+    block_kernel_matrix += block_kernel_matrix_inter.repeat(1, n_way, n_way)
     
-    block_kernel_matrix_mask_x = block_kernel_matrix_mask.reshape(tasks_per_batch, n_way * n_support, 1).expand(tasks_per_batch, n_way * n_support, n_way * n_support)
-    block_kernel_matrix_mask_y = block_kernel_matrix_mask.reshape(tasks_per_batch, 1, n_way * n_support).expand(tasks_per_batch, n_way * n_support, n_way * n_support)
-    block_kernel_matrix_mask_final = (block_kernel_matrix_mask_x == block_kernel_matrix_mask_y).float()
+    kernel_matrix_mask_second_term = support_labels.reshape(tasks_per_batch, n_support, 1).expand(tasks_per_batch, n_support, n_support * n_way)
+    kernel_matrix_mask_second_term = kernel_matrix_mask_second_term == torch.arange(n_way).long().repeat(n_support).reshape(n_support, n_way).transpose(1, 0).reshape(1, -1).repeat(n_support, 1).cuda()
+    kernel_matrix_mask_second_term = kernel_matrix_mask_second_term.float()
+    
+    block_kernel_matrix -= (2.0 - 1e-4) * (kernel_matrix_mask_second_term * kernel_matrix.repeat(1, 1, n_way)).repeat(1, n_way, 1)
 
-    block_kernel_matrix = kernel_matrix.repeat(1, n_way, n_way)
-    block_kernel_matrix = block_kernel_matrix * block_kernel_matrix_mask_final.cuda()
-    
-    
     Y_support = one_hot(support_labels.view(tasks_per_batch * n_support), n_way)
     Y_support = Y_support.view(tasks_per_batch, n_support, n_way)
     Y_support = Y_support.transpose(1, 2)   # (tasks_per_batch, n_way, n_support)
     Y_support = Y_support.reshape(tasks_per_batch, n_way * n_support)
-        
-    C_mat = C_reg * torch.ones(tasks_per_batch, n_way * n_support).cuda() - C_reg * Y_support
     
     G = block_kernel_matrix
 
-    e = -1.0 * Y_support.detach()
+    e = -2.0 * torch.ones(tasks_per_batch, n_way * n_support)
     id_matrix = torch.eye(n_way * n_support).expand(tasks_per_batch, n_way * n_support, n_way * n_support)
-    id_matrix_masked = torch.eye(n_way * n_support).expand(tasks_per_batch, n_way * n_support, n_way * n_support)
-    Y_support_comp = torch.ones(tasks_per_batch, n_way * n_support).cuda() - Y_support
+            
+    C_mat = C_reg * torch.ones(tasks_per_batch, n_way * n_support).cuda() - C_reg * Y_support
 
-    for i in range(tasks_per_batch):
-        id_matrix_masked[i, :, :] = torch.diag(Y_support_comp[i])
-
-    C = Variable(torch.cat((id_matrix, -id_matrix_masked), 1))
-    ineq_lhs = torch.zeros(tasks_per_batch, n_way * n_support).cuda()
+    C = Variable(torch.cat((id_matrix, -id_matrix), 1))
+    #C = Variable(torch.cat((id_matrix_masked, -id_matrix_masked), 1))
+    zer = torch.zeros(tasks_per_batch, n_way * n_support).cuda()
     
-    h = Variable(torch.cat((C_mat, ineq_lhs), 1))
-
-    id_matrix_2 = torch.eye(n_support).expand(tasks_per_batch, n_support, n_support)
-    id_matrix_2 = id_matrix_2.repeat(1, 1, n_way)
-    A = Variable(id_matrix_2).detach()
-    b = Variable(torch.zeros(tasks_per_batch, n_support))
+    h = Variable(torch.cat((C_mat, zer), 1))
     
+    dummy = Variable(torch.Tensor()).cuda()      # We want to ignore the equality constraint.
+
     if double_precision:
-        G, e, C, h, A, b = [x.double().cuda() for x in [G, e, C, h, A, b]]
+        G, e, C, h = [x.double().cuda() for x in [G, e, C, h]]
     else:
-        G, e, C, h, A, b = [x.cuda() for x in [G, e, C, h, A, b]]
+        G, e, C, h = [x.cuda() for x in [G, e, C, h]]
 
     # Solve the following QP to fit SVM:
     #        \hat z =   argmin_z 1/2 z^T G z + e^T z
     #                 subject to Cz <= h
     # We use detach() to prevent backpropagation to fixed variables.
-    qp_sol = QPFunction(verbose=False)(G, e.detach(), C.detach(), h.detach(), A.detach(), b.detach())
-
+    #qp_sol = QPFunction(verbose=False)(G, e.detach(), C.detach(), h.detach(), dummy.detach(), dummy.detach())
+    qp_sol = QPFunction(verbose=False)(G, e, C, h, dummy.detach(), dummy.detach())
 
     # Compute the classification score.
-    compatibility = computeGramMatrix(support, query)
+    compatibility = computeGramMatrix(support, query) + torch.ones(tasks_per_batch, n_support, n_query).cuda()
     compatibility = compatibility.float()
     compatibility = compatibility.unsqueeze(1).expand(tasks_per_batch, n_way, n_support, n_query)
     qp_sol = qp_sol.float()
     qp_sol = qp_sol.reshape(tasks_per_batch, n_way, n_support)
-    logits = qp_sol.float().unsqueeze(3).expand(tasks_per_batch, n_way, n_support, n_query)
-    logits = -logits * compatibility
+    A_i = torch.sum(qp_sol, 1)   # (tasks_per_batch, n_support)
+    A_i = A_i.unsqueeze(1).expand(tasks_per_batch, n_way, n_support)
+    qp_sol = qp_sol.float().unsqueeze(3).expand(tasks_per_batch, n_way, n_support, n_query)
+    Y_support_reshaped = Y_support.reshape(tasks_per_batch, n_way, n_support)
+    Y_support_reshaped = A_i * Y_support_reshaped
+    Y_support_reshaped = Y_support_reshaped.unsqueeze(3).expand(tasks_per_batch, n_way, n_support, n_query)
+    logits = (Y_support_reshaped - qp_sol) * compatibility
+
     logits = torch.sum(logits, 2)
 
     return logits.transpose(1, 2)
