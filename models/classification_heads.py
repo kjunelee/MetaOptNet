@@ -327,11 +327,8 @@ def MetaOptNetHead_SVM_CS(query, support, support_labels, n_way, n_shot, C_reg=0
 
     return logits
 
-def MetaOptNetHead_SVM_WW(query, support, support_labels, n_way, n_shot, C_reg=0.1, double_precision=False):
+def MetaOptNetHead_SVM_WW(query, support, support_labels, n_way, n_shot, C_reg=0.00001, double_precision=False):
     """
-    CAUTION: THIS SVM IMPLEMENTATION SEEMS TO CAUSE NUMERICAL INSTABILITIES IN QP SOLVER.
-    WE INCLUDE FOR THE REFERENCE, BUT WE DO NOT RECOMMEND USING IT.
-    
     Fits the support set with multi-class SVM and 
     returns the classification score on the query set.
     
