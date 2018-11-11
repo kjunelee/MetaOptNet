@@ -26,6 +26,8 @@ def get_model(options):
         network = R2D2Embedding().cuda()
     elif options.network == 'ResNet':
         network = resnet12(avg_pool=False, drop_rate=0.1).cuda()
+        network = torch.nn.DataParallel(network, device_ids=[0, 1, 2, 3])
+        #network = torch.nn.DataParallel(network, device_ids=[0, 1, 2])
     else:
         print ("Cannot recognize the network type")
         assert(False)
@@ -36,7 +38,7 @@ def get_model(options):
     elif options.head == 'R2D2':
         cls_head = ClassificationHead(base_learner='R2D2').cuda()
     elif options.head == 'SVM':
-        cls_head = ClassificationHead(base_learner='MetaOptNet').cuda()
+        cls_head = ClassificationHead(base_learner='SVM-WW').cuda()
     else:
         print ("Cannot recognize the classification head type")
         assert(False)
@@ -49,8 +51,10 @@ if __name__ == '__main__':
                             help='number of training epochs')
     parser.add_argument('--save-epoch', type=int, default=10,
                             help='frequency of model saving')
-    parser.add_argument('--shot', type=int, default=1,
+    parser.add_argument('--train-shot', type=int, default=10,
                             help='number of support examples per training class')
+    parser.add_argument('--val-shot', type=int, default=5,
+                            help='number of support examples per validation class')
     parser.add_argument('--query', type=int, default=6,
                             help='number of query examples per training class')
     parser.add_argument('--val-episode', type=int, default=1000,
@@ -79,7 +83,7 @@ if __name__ == '__main__':
         dataset=dataset_train,
         nKnovel=opt.train_way,
         nKbase=0,
-        nExemplars=opt.shot, # num training examples per novel category
+        nExemplars=opt.train_shot, # num training examples per novel category
         nTestNovel=opt.train_way * opt.query, # num test examples for all the novel categories
         nTestBase=0, # num test examples for all the base categories
         batch_size=opt.episodes_per_batch,
@@ -91,7 +95,7 @@ if __name__ == '__main__':
         dataset=dataset_val,
         nKnovel=opt.test_way,
         nKbase=0,
-        nExemplars=opt.shot, # num training examples per novel category
+        nExemplars=opt.val_shot, # num training examples per novel category
         nTestNovel=opt.val_query * opt.test_way, # num test examples for all the novel categories
         nTestBase=0, # num test examples for all the base categories
         batch_size=1,
@@ -146,16 +150,16 @@ if __name__ == '__main__':
         for i, batch in enumerate(tqdm(dloader_train(epoch)), 1):
             data_support, labels_support, data_query, labels_query, _, _ = [x.cuda() for x in batch]
 
-            n_support = opt.train_way * opt.shot
+            n_support = opt.train_way * opt.train_shot
             n_query = opt.train_way * opt.query
 
             emb_support = embedding_net(data_support.reshape([-1] + list(data_support.shape[-3:])))
-            emb_support = emb_support.reshape(opt.episodes_per_batch, opt.train_way * opt.shot, -1)
+            emb_support = emb_support.reshape(opt.episodes_per_batch, opt.train_way * opt.train_shot, -1)
             
             emb_query = embedding_net(data_query.reshape([-1] + list(data_query.shape[-3:])))
             emb_query = emb_query.reshape(opt.episodes_per_batch, opt.train_way * opt.query, -1)
             
-            logit_query = cls_head(emb_query, emb_support, labels_support, opt.train_way, opt.shot)
+            logit_query = cls_head(emb_query, emb_support, labels_support, opt.train_way, opt.train_shot)
 
             loss = x_entropy(logit_query.reshape(-1, opt.train_way), labels_query.reshape(-1))
             acc = count_accuracy(logit_query.reshape(-1, opt.train_way), labels_query.reshape(-1))
@@ -181,7 +185,7 @@ if __name__ == '__main__':
         for i, batch in enumerate(tqdm(dloader_val(epoch)), 1):
             data_support, labels_support, data_query, labels_query, _, _ = [x.cuda() for x in batch]
 
-            n_support = opt.test_way * opt.shot
+            n_support = opt.test_way * opt.val_shot
             n_query = opt.test_way * opt.val_query
 
             emb_support = embedding_net(data_support.reshape([-1] + list(data_support.shape[-3:])))
@@ -189,7 +193,7 @@ if __name__ == '__main__':
             emb_query = embedding_net(data_query.reshape([-1] + list(data_query.shape[-3:])))
             emb_query = emb_query.reshape(1, n_query, -1)
 
-            logit_query = cls_head(emb_query, emb_support, labels_support, opt.test_way, opt.shot)
+            logit_query = cls_head(emb_query, emb_support, labels_support, opt.test_way, opt.val_shot)
 
             loss = x_entropy(logit_query.reshape(-1, opt.test_way), labels_query.reshape(-1))
             acc = count_accuracy(logit_query.reshape(-1, opt.test_way), labels_query.reshape(-1))
