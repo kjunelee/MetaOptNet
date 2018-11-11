@@ -59,6 +59,10 @@ def one_hot(indices, depth):
     
     return encoded_indicies
 
+def batched_kronecker(matrix1, matrix2):
+    matrix1_flatten = matrix1.reshape(matrix1.size()[0], -1)
+    matrix2_flatten = matrix2.reshape(matrix2.size()[0], -1)
+    return torch.bmm(matrix1_flatten.unsqueeze(2), matrix2_flatten.unsqueeze(1)).reshape([matrix1.size()[0]] + list(matrix1.size()[1:]) + list(matrix2.size()[1:])).permute([0, 1, 3, 2, 4]).reshape(matrix1.size(0), matrix1.size(1) * matrix2.size(1), matrix1.size(2) * matrix2.size(2))
 
 def R2D2Head(query, support, support_labels, n_way, n_shot, l2_regularizer_lambda=50.0):
     """
@@ -232,7 +236,7 @@ def ProtoNetHead(query, support, support_labels, n_way, n_shot, normalize=True):
 
     return logits
 
-def MetaOptNetHead_SVM(query, support, support_labels, n_way, n_shot, C_reg=0.1, double_precision=False):
+def MetaOptNetHead_SVM_CS(query, support, support_labels, n_way, n_shot, C_reg=0.1, double_precision=False):
     """
     Fits the support set with multi-class SVM and 
     returns the classification score on the query set.
@@ -273,56 +277,34 @@ def MetaOptNetHead_SVM(query, support, support_labels, n_way, n_shot, C_reg=0.1,
     #C^m_i = 0 if m != y_i.
     #This borrows the notation of liblinear.
     
-    #In theory, \alpha is an (n_support, n_way) matrix
-    #NOTE: In this implementation, we solve for a flattened vector of size (n_way*n_support)
-    #In order to turn it into a matrix, you must first reshape it into an (n_way, n_support) matrix
-    #then transpose it, resulting in (n_support, n_way) matrix
+    #\alpha is an (n_support, n_way) matrix
     kernel_matrix = computeGramMatrix(support, support)
-    
-    ### From here
-    block_kernel_matrix_mask = torch.arange(n_way).repeat(n_support)
-    block_kernel_matrix_mask = block_kernel_matrix_mask.reshape(n_support, n_way)
-    block_kernel_matrix_mask = block_kernel_matrix_mask.t()
-    block_kernel_matrix_mask = block_kernel_matrix_mask.reshape(n_way * n_support)
-    block_kernel_matrix_mask = block_kernel_matrix_mask.unsqueeze(0).expand(tasks_per_batch, n_way * n_support)
-    
-    block_kernel_matrix_mask_x = block_kernel_matrix_mask.reshape(tasks_per_batch, n_way * n_support, 1).expand(tasks_per_batch, n_way * n_support, n_way * n_support)
-    block_kernel_matrix_mask_y = block_kernel_matrix_mask.reshape(tasks_per_batch, 1, n_way * n_support).expand(tasks_per_batch, n_way * n_support, n_way * n_support)
-    block_kernel_matrix_mask_final = (block_kernel_matrix_mask_x == block_kernel_matrix_mask_y).float()
 
-    block_kernel_matrix = kernel_matrix.repeat(1, n_way, n_way)
-    block_kernel_matrix = block_kernel_matrix * block_kernel_matrix_mask_final.cuda()
-    ### To here is a vectorized version of the following loop:
-    """
-    block_kernel_matrix = torch.zeros(tasks_per_batch, n_way * n_support, n_way * n_support)
-
-    for i in range(n_way):
-        block_kernel_matrix[:, i * n_support:(i+1) * n_support, i * n_support:(i+1) * n_support] = kernel_matrix
-    """
+    id_matrix_0 = torch.eye(n_way).expand(tasks_per_batch, n_way, n_way).cuda()
+    block_kernel_matrix = batched_kronecker(kernel_matrix, id_matrix_0)
     
     support_labels_one_hot = one_hot(support_labels.view(tasks_per_batch * n_support), n_way) # (tasks_per_batch * n_support, n_support)
     support_labels_one_hot = support_labels_one_hot.view(tasks_per_batch, n_support, n_way)
-    support_labels_one_hot = support_labels_one_hot.transpose(1, 2)   # (tasks_per_batch, n_way, n_support)
-    support_labels_one_hot = support_labels_one_hot.reshape(tasks_per_batch, n_way * n_support)
+    support_labels_one_hot = support_labels_one_hot.reshape(tasks_per_batch, n_support * n_way)
     
     G = block_kernel_matrix
     e = -1.0 * support_labels_one_hot
-    
+    #print (G.size())
     #This part is for the inequality constraints:
     #\alpha^m_i <= C^m_i \forall m,i
     #where C^m_i = C if m  = y_i,
     #C^m_i = 0 if m != y_i.
-    id_matrix = torch.eye(n_way * n_support).expand(tasks_per_batch, n_way * n_support, n_way * n_support)
-    C = Variable(id_matrix)
+    id_matrix_1 = torch.eye(n_way * n_support).expand(tasks_per_batch, n_way * n_support, n_way * n_support)
+    C = Variable(id_matrix_1)
     h = Variable(C_reg * support_labels_one_hot)
-    
+    #print (C.size(), h.size())
     #This part is for the equality constraints:
     #\sum_m \alpha^m_i=0 \forall i
-    id_matrix_2 = torch.eye(n_support).expand(tasks_per_batch, n_support, n_support)
-    id_matrix_2 = id_matrix_2.repeat(1, 1, n_way)
-    A = Variable(id_matrix_2)
+    id_matrix_2 = torch.eye(n_support).expand(tasks_per_batch, n_support, n_support).cuda()
+
+    A = Variable(batched_kronecker(id_matrix_2, torch.ones(tasks_per_batch, 1, n_way).cuda()))
     b = Variable(torch.zeros(tasks_per_batch, n_support))
-    
+    #print (A.size(), b.size())
     if double_precision:
         G, e, C, h, A, b = [x.double().cuda() for x in [G, e, C, h, A, b]]
     else:
@@ -337,13 +319,13 @@ def MetaOptNetHead_SVM(query, support, support_labels, n_way, n_shot, C_reg=0.1,
     # Compute the classification score.
     compatibility = computeGramMatrix(support, query)
     compatibility = compatibility.float()
-    compatibility = compatibility.unsqueeze(1).expand(tasks_per_batch, n_way, n_support, n_query)
-    qp_sol = qp_sol.reshape(tasks_per_batch, n_way, n_support)
-    logits = qp_sol.float().unsqueeze(3).expand(tasks_per_batch, n_way, n_support, n_query)
+    compatibility = compatibility.unsqueeze(3).expand(tasks_per_batch, n_support, n_query, n_way)
+    qp_sol = qp_sol.reshape(tasks_per_batch, n_support, n_way)
+    logits = qp_sol.float().unsqueeze(2).expand(tasks_per_batch, n_support, n_query, n_way)
     logits = logits * compatibility
-    logits = torch.sum(logits, 2)
+    logits = torch.sum(logits, 1)
 
-    return logits.transpose(1, 2)
+    return logits
 
 def MetaOptNetHead_SVM_WW(query, support, support_labels, n_way, n_shot, C_reg=0.1, double_precision=False):
     """
@@ -448,7 +430,7 @@ class ClassificationHead(nn.Module):
     def __init__(self, base_learner='MetaOptNet', enable_scale=True):
         super(ClassificationHead, self).__init__()
         if ('MetaOptNet' in base_learner):
-            self.head = MetaOptNetHead_SVM
+            self.head = MetaOptNetHead_SVM_CS
         elif ('R2D2' in base_learner):
             self.head = R2D2Head
         elif ('Proto' in base_learner):
