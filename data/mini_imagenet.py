@@ -135,11 +135,11 @@ class MiniImageNet(data.Dataset):
         else:
             self.transform = transforms.Compose([
                 transforms.RandomCrop(84, padding=8),
+                transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
                 transforms.RandomHorizontalFlip(),
                 lambda x: np.asarray(x),
                 transforms.ToTensor(),
                 normalize
-            ])
 
     def __getitem__(self, index):
         img, label = self.data[index], self.labels[index]
