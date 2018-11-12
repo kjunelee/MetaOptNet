@@ -28,8 +28,8 @@ def get_model(opt):
         network = R2D2Embedding().cuda()
     elif opt.network == 'ResNet':
         network = resnet12(avg_pool=False, drop_rate=0.1).cuda()
-        #network = torch.nn.DataParallel(network, device_ids=[0, 1, 2, 3])
-        network = torch.nn.DataParallel(network, device_ids=[0, 1, 2])
+        network = torch.nn.DataParallel(network, device_ids=[0, 1, 2, 3])
+        #network = torch.nn.DataParallel(network, device_ids=[0, 1, 2])
     else:
         print ("Cannot recognize the network type")
         assert(False)
