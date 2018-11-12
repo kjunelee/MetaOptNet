@@ -9,8 +9,6 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
 
-from data.mini_imagenet import MiniImageNet, FewShotDataloader
-
 from models.classification_heads import ClassificationHead
 from models.R2D2_embedding import R2D2Embedding
 from models.protonet_embedding import ProtoNetEmbedding
@@ -40,10 +38,28 @@ def get_model(options):
     elif options.head == 'SVM':
         cls_head = ClassificationHead(base_learner='SVM-WW').cuda()
     else:
-        print ("Cannot recognize the classification head type")
+        print ("Cannot recognize the dataset type")
         assert(False)
         
     return (network, cls_head)
+
+def get_dataset(options):
+    # Choose the embedding network
+    if options.dataset == 'miniImageNet':
+        from data.mini_imagenet import MiniImageNet, FewShotDataloader
+        dataset_train = MiniImageNet(phase='train')
+        dataset_val = MiniImageNet(phase='val')
+        data_loader = FewShotDataloader
+    elif options.dataset == 'tieredImageNet':
+        from data.tiered_imagenet import tieredImageNet, FewShotDataloader
+        dataset_train = tieredImageNet(phase='train')
+        dataset_val = tieredImageNet(phase='val')
+        data_loader = FewShotDataloader
+    else:
+        print ("Cannot recognize the network type")
+        assert(False)
+        
+    return (dataset_train, dataset_val, data_loader)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -66,20 +82,21 @@ if __name__ == '__main__':
     parser.add_argument('--test-way', type=int, default=5,
                             help='number of classes in one test (or validation) episode')
     parser.add_argument('--save-path', default='./experiments/exp_1')
-    parser.add_argument('--gpu', default='0')
+    parser.add_argument('--gpu', default='0, 1, 2, 3')
     parser.add_argument('--network', type=str, default='ProtoNet',
                             help='choose which embedding network to use. ProtoNet, R2D2, ResNet')
     parser.add_argument('--head', type=str, default='ProtoNet',
                             help='choose which classification head to use. ProtoNet, R2D2, SVM')
+    parser.add_argument('--dataset', type=str, default='miniImageNet',
+                            help='choose which classification head to use. miniImageNet, tieredImageNet')
     parser.add_argument('--episodes-per-batch', type=int, default=8,
                             help='number of episodes per batch')
     opt = parser.parse_args()
     
-    dataset_train = MiniImageNet(phase='train')
-    dataset_val = MiniImageNet(phase='val')
+    (dataset_train, dataset_val, data_loader) = get_dataset(opt)
 
     # Dataloader of Gidaris & Komodakis (CVPR 2018)
-    dloader_train = FewShotDataloader(
+    dloader_train = data_loader(
         dataset=dataset_train,
         nKnovel=opt.train_way,
         nKbase=0,
@@ -91,7 +108,7 @@ if __name__ == '__main__':
         epoch_size=opt.episodes_per_batch * 1000, # num of batches per epoch
     )
 
-    dloader_val = FewShotDataloader(
+    dloader_val = data_loader(
         dataset=dataset_val,
         nKnovel=opt.test_way,
         nKbase=0,
@@ -104,6 +121,7 @@ if __name__ == '__main__':
     )
 
     set_gpu(opt.gpu)
+    check_dir('./experiments/')
     check_dir(opt.save_path)
     
     log_file_path = os.path.join(opt.save_path, "train_log.txt")

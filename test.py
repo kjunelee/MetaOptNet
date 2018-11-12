@@ -9,8 +9,6 @@ from torch.autograd import Variable
 
 from tqdm import tqdm
 
-from data.mini_imagenet import MiniImageNet, FewShotDataloader
-
 from models.protonet_embedding import ProtoNetEmbedding
 from models.R2D2_embedding import R2D2Embedding
 from models.ResNet12_embedding import resnet12
@@ -30,6 +28,8 @@ def get_model(opt):
         network = R2D2Embedding().cuda()
     elif opt.network == 'ResNet':
         network = resnet12(avg_pool=False, drop_rate=0.1).cuda()
+        #network = torch.nn.DataParallel(network, device_ids=[0, 1, 2, 3])
+        network = torch.nn.DataParallel(network, device_ids=[0, 1, 2])
     else:
         print ("Cannot recognize the network type")
         assert(False)
@@ -49,6 +49,22 @@ def get_model(opt):
         
     return (network, cls_head)
 
+def get_dataset(options):
+    # Choose the embedding network
+    if options.dataset == 'miniImageNet':
+        from data.mini_imagenet import MiniImageNet, FewShotDataloader
+        dataset_test = MiniImageNet(phase='test')
+        data_loader = FewShotDataloader
+    elif options.dataset == 'tieredImageNet':
+        from data.tiered_imagenet import tieredImageNet, FewShotDataloader
+        dataset_test = tieredImageNet(phase='test')
+        data_loader = FewShotDataloader
+    else:
+        print ("Cannot recognize the network type")
+        assert(False)
+        
+    return (dataset_test, data_loader)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--gpu', default='0')
@@ -66,12 +82,13 @@ if __name__ == '__main__':
                             help='choose which embedding network to use. ProtoNet, R2D2, ResNet')
     parser.add_argument('--head', type=str, default='ProtoNet',
                             help='choose which embedding network to use. ProtoNet, R2D2, SVM')
+    parser.add_argument('--dataset', type=str, default='miniImageNet',
+                            help='choose which classification head to use. miniImageNet, tieredImageNet')
 
     opt = parser.parse_args()
-    
-    dataset_test = MiniImageNet(phase='test')
+    (dataset_test, data_loader) = get_dataset(opt)
 
-    dloader_test = FewShotDataloader(
+    dloader_test = data_loader(
         dataset=dataset_test,
         nKnovel=opt.way,
         nKbase=0,
