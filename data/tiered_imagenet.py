@@ -1,6 +1,7 @@
 # Dataloader of Gidaris & Komodakis, CVPR 2018
 # Adapted from:
 # https://github.com/gidariss/FewShotWithoutForgetting/blob/master/dataloader.py
+
 from __future__ import print_function
 
 import os
@@ -27,7 +28,7 @@ from pdb import set_trace as breakpoint
 
 
 # Set the appropriate paths of the datasets here.
-_MINI_IMAGENET_DATASET_DIR = '/efs/data/miniimagenet/kwonl/data/miniImageNet_numpy'
+_TIERED_IMAGENET_DATASET_DIR = '/mnt/cube/datasets/tiered-imagenet/'
 
 def buildLabelIndex(labels):
     label2inds = {}
@@ -51,37 +52,54 @@ def load_data(file):
             data = u.load()
         return data
 
-class MiniImageNet(data.Dataset):
+class tieredImageNet(data.Dataset):
     def __init__(self, phase='train', do_not_use_random_transf=False):
 
-        self.base_folder = 'miniImagenet'
         assert(phase=='train' or phase=='val' or phase=='test')
         self.phase = phase
-        self.name = 'MiniImageNet_' + phase
+        self.name = 'tieredImageNet_' + phase
 
-        print('Loading mini ImageNet dataset - phase {0}'.format(phase))
+        print('Loading tiered ImageNet dataset - phase {0}'.format(phase))
         file_train_categories_train_phase = os.path.join(
-            _MINI_IMAGENET_DATASET_DIR,
-            'miniImageNet_category_split_train_phase_train.pickle')
+            _TIERED_IMAGENET_DATASET_DIR,
+            'train_images.npz')
+        label_train_categories_train_phase = os.path.join(
+            _TIERED_IMAGENET_DATASET_DIR,
+            'train_labels.pkl')
         file_train_categories_val_phase = os.path.join(
-            _MINI_IMAGENET_DATASET_DIR,
-            'miniImageNet_category_split_train_phase_val.pickle')
+            _TIERED_IMAGENET_DATASET_DIR,
+            'train_images.npz')
+        label_train_categories_val_phase = os.path.join(
+            _TIERED_IMAGENET_DATASET_DIR,
+            'train_labels.pkl')
         file_train_categories_test_phase = os.path.join(
-            _MINI_IMAGENET_DATASET_DIR,
-            'miniImageNet_category_split_train_phase_test.pickle')
-        file_val_categories_val_phase = os.path.join(
-            _MINI_IMAGENET_DATASET_DIR,
-            'miniImageNet_category_split_val.pickle')
-        file_test_categories_test_phase = os.path.join(
-            _MINI_IMAGENET_DATASET_DIR,
-            'miniImageNet_category_split_test.pickle')
+            _TIERED_IMAGENET_DATASET_DIR,
+            'train_images.npz')
+        label_train_categories_test_phase = os.path.join(
+            _TIERED_IMAGENET_DATASET_DIR,
+            'train_labels.pkl')
 
+        file_val_categories_val_phase = os.path.join(
+            _TIERED_IMAGENET_DATASET_DIR,
+            'val_images.npz')
+        label_val_categories_val_phase = os.path.join(
+            _TIERED_IMAGENET_DATASET_DIR,
+            'val_labels.pkl')
+        file_test_categories_test_phase = os.path.join(
+            _TIERED_IMAGENET_DATASET_DIR,
+            'test_images.npz')
+        label_test_categories_test_phase = os.path.join(
+            _TIERED_IMAGENET_DATASET_DIR,
+            'test_labels.pkl')
+        
         if self.phase=='train':
             # During training phase we only load the training phase images
             # of the training categories (aka base categories).
-            data_train = load_data(file_train_categories_train_phase)
-            self.data = data_train['data']
+            data_train = load_data(label_train_categories_train_phase)
+            #self.data = data_train['data']
             self.labels = data_train['labels']
+            self.data = np.load(file_train_categories_train_phase)['images']#np.array(load_data(file_train_categories_train_phase))
+            #self.labels = load_data(file_train_categories_train_phase)#data_train['labels']
 
             self.label2ind = buildLabelIndex(self.labels)
             self.labelIds = sorted(self.label2ind.keys())
@@ -93,20 +111,27 @@ class MiniImageNet(data.Dataset):
             if self.phase=='test':
                 # load data that will be used for evaluating the recognition
                 # accuracy of the base categories.
-                data_base = load_data(file_train_categories_test_phase)
+                data_base = load_data(label_train_categories_test_phase)
+                data_base_images = np.load(file_train_categories_test_phase)['images']
+                
                 # load data that will be use for evaluating the few-shot recogniton
                 # accuracy on the novel categories.
-                data_novel = load_data(file_test_categories_test_phase)
+                data_novel = load_data(label_test_categories_test_phase)
+                data_novel_images = np.load(file_test_categories_test_phase)['images']
             else: # phase=='val'
                 # load data that will be used for evaluating the recognition
                 # accuracy of the base categories.
-                data_base = load_data(file_train_categories_val_phase)
+                data_base = load_data(label_train_categories_val_phase)
+                data_base_images = np.load(file_train_categories_val_phase)['images']
+                #print (data_base_images)
+                #print (data_base_images.shape)
                 # load data that will be use for evaluating the few-shot recogniton
                 # accuracy on the novel categories.
-                data_novel = load_data(file_val_categories_val_phase)
+                data_novel = load_data(label_val_categories_val_phase)
+                data_novel_images = np.load(file_val_categories_val_phase)['images']
 
             self.data = np.concatenate(
-                [data_base['data'], data_novel['data']], axis=0)
+                [data_base_images, data_novel_images], axis=0)
             self.labels = data_base['labels'] + data_novel['labels']
 
             self.label2ind = buildLabelIndex(self.labels)
@@ -118,6 +143,7 @@ class MiniImageNet(data.Dataset):
             self.num_cats_base = len(self.labelIds_base)
             self.num_cats_novel = len(self.labelIds_novel)
             intersection = set(self.labelIds_base) & set(self.labelIds_novel)
+            print (intersection)
             assert(len(intersection) == 0)
         else:
             raise ValueError('Not valid phase {0}'.format(self.phase))
@@ -141,7 +167,7 @@ class MiniImageNet(data.Dataset):
                 transforms.ToTensor(),
                 normalize
             ])
-            
+
     def __getitem__(self, index):
         img, label = self.data[index], self.labels[index]
         # doing this so that it is consistent with all other datasets
