@@ -24,6 +24,8 @@ def get_model(opt):
     # Choose the embedding network
     if opt.network == 'ProtoNet':
         network = ProtoNetEmbedding().cuda()
+    elif options.head == 'Ridge':
+        cls_head = ClassificationHead(base_learner='Ridge').cuda()
     elif opt.network == 'R2D2':
         network = R2D2Embedding().cuda()
     elif opt.network == 'ResNet':
@@ -81,7 +83,7 @@ if __name__ == '__main__':
     parser.add_argument('--network', type=str, default='ProtoNet',
                             help='choose which embedding network to use. ProtoNet, R2D2, ResNet')
     parser.add_argument('--head', type=str, default='ProtoNet',
-                            help='choose which embedding network to use. ProtoNet, R2D2, SVM')
+                            help='choose which embedding network to use. ProtoNet, Ridge, R2D2, SVM')
     parser.add_argument('--dataset', type=str, default='miniImageNet',
                             help='choose which classification head to use. miniImageNet, tieredImageNet')
 
