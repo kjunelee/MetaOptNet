@@ -523,6 +523,8 @@ class ClassificationHead(nn.Module):
         super(ClassificationHead, self).__init__()
         if ('MetaOptNet' in base_learner):
             self.head = MetaOptNetHead_SVM_CS
+        elif ('Ridge' in base_learner):
+            self.head = MetaOptNetHead_Ridge
         elif ('R2D2' in base_learner):
             self.head = R2D2Head
         elif ('Proto' in base_learner):
