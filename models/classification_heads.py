@@ -64,6 +64,81 @@ def batched_kronecker(matrix1, matrix2):
     matrix2_flatten = matrix2.reshape(matrix2.size()[0], -1)
     return torch.bmm(matrix1_flatten.unsqueeze(2), matrix2_flatten.unsqueeze(1)).reshape([matrix1.size()[0]] + list(matrix1.size()[1:]) + list(matrix2.size()[1:])).permute([0, 1, 3, 2, 4]).reshape(matrix1.size(0), matrix1.size(1) * matrix2.size(1), matrix1.size(2) * matrix2.size(2))
 
+def MetaOptNetHead_Ridge(query, support, support_labels, n_way, n_shot, lambda_reg=50.0, double_precision=False):
+    """
+    Fits the support set with ridge regression and 
+    returns the classification score on the query set.
+
+    Parameters:
+      query:  a (tasks_per_batch, n_query, d) Tensor.
+      support:  a (tasks_per_batch, n_support, d) Tensor.
+      support_labels: a (tasks_per_batch, n_support) Tensor.
+      n_way: a scalar. Represents the number of classes in a few-shot classification task.
+      n_shot: a scalar. Represents the number of support examples given per class.
+      C_reg: a scalar. Represents the cost parameter C in SVM.
+    Returns: a (tasks_per_batch, n_query, n_way) Tensor.
+    """
+    
+    tasks_per_batch = query.size(0)
+    n_support = support.size(1)
+    n_query = query.size(1)
+
+    assert(query.dim() == 3)
+    assert(support.dim() == 3)
+    assert(query.size(0) == support.size(0) and query.size(2) == support.size(2))
+    assert(n_support == n_way * n_shot)      # n_support must equal to n_way * n_shot
+
+    #Here we solve the dual problem:
+    #Note that the classes are indexed by m & samples are indexed by i.
+    #min_{\alpha}  0.5 \sum_m ||w_m(\alpha)||^2 + \sum_i \sum_m e^m_i alpha^m_i
+    #s.t.  \alpha^m_i <= C^m_i \forall m,i , \sum_m \alpha^m_i=0 \forall i
+
+    #where w_m(\alpha) = \sum_i \alpha^m_i x_i,
+    #and C^m_i = C if m  = y_i,
+    #C^m_i = 0 if m != y_i.
+    #This borrows the notation of liblinear.
+    
+    #\alpha is an (n_support, n_way) matrix
+    kernel_matrix = computeGramMatrix(support, support)
+    kernel_matrix += lambda_reg * torch.eye(n_support).expand(tasks_per_batch, n_support, n_support).cuda()
+    id_matrix_0 = torch.eye(n_way).expand(tasks_per_batch, n_way, n_way).cuda()
+    block_kernel_matrix = batched_kronecker(kernel_matrix, id_matrix_0)
+    
+    support_labels_one_hot = one_hot(support_labels.view(tasks_per_batch * n_support), n_way) # (tasks_per_batch * n_support, n_support)
+    support_labels_one_hot = support_labels_one_hot.view(tasks_per_batch, n_support, n_way)
+    support_labels_one_hot = support_labels_one_hot.reshape(tasks_per_batch, n_support * n_way)
+    
+    G = block_kernel_matrix
+    e = -2.0 * support_labels_one_hot
+    
+    #This is a fake inequlity constraint as qpth does not support QP without an inequality constraint.
+    id_matrix_1 = torch.zeros(tasks_per_batch, n_way * n_support, n_way * n_support)
+    C = Variable(id_matrix_1)
+    h = Variable(torch.zeros((tasks_per_batch, n_support * n_way)))
+    dummy = Variable(torch.Tensor()).cuda()      # We want to ignore the equality constraint.
+
+    if double_precision:
+        G, e, C, h = [x.double().cuda() for x in [G, e, C, h]]
+    else:
+        G, e, C, h = [x.float().cuda() for x in [G, e, C, h]]
+
+    # Solve the following QP to fit SVM:
+    #        \hat z =   argmin_z 1/2 z^T G z + e^T z
+    #                 subject to Cz <= h
+    # We use detach() to prevent backpropagation to fixed variables.
+    qp_sol = QPFunction(verbose=False)(G, e.detach(), C.detach(), h.detach(), dummy.detach(), dummy.detach())
+
+    # Compute the classification score.
+    compatibility = computeGramMatrix(support, query)
+    compatibility = compatibility.float()
+    compatibility = compatibility.unsqueeze(3).expand(tasks_per_batch, n_support, n_query, n_way)
+    qp_sol = qp_sol.reshape(tasks_per_batch, n_support, n_way)
+    logits = qp_sol.float().unsqueeze(2).expand(tasks_per_batch, n_support, n_query, n_way)
+    logits = logits * compatibility
+    logits = torch.sum(logits, 1)
+
+    return logits
+
 def R2D2Head(query, support, support_labels, n_way, n_shot, l2_regularizer_lambda=50.0):
     """
     Fits the support set with ridge regression and 
