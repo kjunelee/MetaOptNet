@@ -24,8 +24,6 @@ def get_model(opt):
     # Choose the embedding network
     if opt.network == 'ProtoNet':
         network = ProtoNetEmbedding().cuda()
-    elif options.head == 'Ridge':
-        cls_head = ClassificationHead(base_learner='Ridge').cuda()
     elif opt.network == 'R2D2':
         network = R2D2Embedding().cuda()
     elif opt.network == 'ResNet':
@@ -38,7 +36,9 @@ def get_model(opt):
         
     # Choose the classification head
     if opt.head == 'ProtoNet':
-        cls_head = ClassificationHead(base_learner='ProtoNet').cuda()
+        cls_head = ClassificationHead(base_learner='ProtoNet').cuda()    
+    elif opt.head == 'Ridge':
+        cls_head = ClassificationHead(base_learner='Ridge').cuda()
     elif opt.head == 'R2D2':
         cls_head = ClassificationHead(base_learner='R2D2').cuda()
     elif opt.head == 'SVM':
