@@ -33,6 +33,8 @@ def get_model(options):
     # Choose the classification head
     if options.head == 'ProtoNet':
         cls_head = ClassificationHead(base_learner='ProtoNet').cuda()
+    elif options.head == 'Ridge':
+        cls_head = ClassificationHead(base_learner='Ridge').cuda()
     elif options.head == 'R2D2':
         cls_head = ClassificationHead(base_learner='R2D2').cuda()
     elif options.head == 'SVM':
@@ -86,7 +88,7 @@ if __name__ == '__main__':
     parser.add_argument('--network', type=str, default='ProtoNet',
                             help='choose which embedding network to use. ProtoNet, R2D2, ResNet')
     parser.add_argument('--head', type=str, default='ProtoNet',
-                            help='choose which classification head to use. ProtoNet, R2D2, SVM')
+                            help='choose which classification head to use. ProtoNet, Ridge, R2D2, SVM')
     parser.add_argument('--dataset', type=str, default='miniImageNet',
                             help='choose which classification head to use. miniImageNet, tieredImageNet')
     parser.add_argument('--episodes-per-batch', type=int, default=8,
