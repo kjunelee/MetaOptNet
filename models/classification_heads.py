@@ -75,7 +75,7 @@ def MetaOptNetHead_Ridge(query, support, support_labels, n_way, n_shot, lambda_r
       support_labels: a (tasks_per_batch, n_support) Tensor.
       n_way: a scalar. Represents the number of classes in a few-shot classification task.
       n_shot: a scalar. Represents the number of support examples given per class.
-      C_reg: a scalar. Represents the cost parameter C in SVM.
+      lambda_reg: a scalar. Represents the strength of L2 regularization.
     Returns: a (tasks_per_batch, n_query, n_way) Tensor.
     """
     
@@ -311,7 +311,7 @@ def ProtoNetHead(query, support, support_labels, n_way, n_shot, normalize=True):
 
     return logits
 
-def MetaOptNetHead_SVM_CS(query, support, support_labels, n_way, n_shot, C_reg=0.1, double_precision=False):
+def MetaOptNetHead_SVM_CS(query, support, support_labels, n_way, n_shot, C_reg=0.1, double_precision=False, maxIter=15):
     """
     Fits the support set with multi-class SVM and 
     returns the classification score on the query set.
@@ -321,8 +321,6 @@ def MetaOptNetHead_SVM_CS(query, support, support_labels, n_way, n_shot, C_reg=0
     (Crammer and Singer, Journal of Machine Learning Research 2001).
 
     This model is the classification head that we use for the final version.
-    This model gives 60.06+/-0.38% accuracy in miniImageNet 5-way 1-shot (state-of-the-art as of Sep. 19th 2018) &
-                     75.35+/-0.28% accuracy on miniImageNet 5-way 5-shot.
     Parameters:
       query:  a (tasks_per_batch, n_query, d) Tensor.
       support:  a (tasks_per_batch, n_support, d) Tensor.
@@ -391,7 +389,7 @@ def MetaOptNetHead_SVM_CS(query, support, support_labels, n_way, n_shot, C_reg=0
     #        \hat z =   argmin_z 1/2 z^T G z + e^T z
     #                 subject to Cz <= h
     # We use detach() to prevent backpropagation to fixed variables.
-    qp_sol = QPFunction(verbose=False)(G, e.detach(), C.detach(), h.detach(), A.detach(), b.detach())
+    qp_sol = QPFunction(verbose=False, maxIter=maxIter)(G, e.detach(), C.detach(), h.detach(), A.detach(), b.detach())
 
     # Compute the classification score.
     compatibility = computeGramMatrix(support, query)
@@ -523,7 +521,7 @@ def MetaOptNetHead_SVM_WW(query, support, support_labels, n_way, n_shot, C_reg=0
 class ClassificationHead(nn.Module):
     def __init__(self, base_learner='MetaOptNet', enable_scale=True):
         super(ClassificationHead, self).__init__()
-        if ('MetaOptNet' in base_learner):
+        if ('SVM-CS' in base_learner):
             self.head = MetaOptNetHead_SVM_CS
         elif ('Ridge' in base_learner):
             self.head = MetaOptNetHead_Ridge
@@ -548,4 +546,3 @@ class ClassificationHead(nn.Module):
             return self.scale * self.head(query, support, support_labels, n_way, n_shot, **kwargs)
         else:
             return self.head(query, support, support_labels, n_way, n_shot, **kwargs)
-        
