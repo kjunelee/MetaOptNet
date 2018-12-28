@@ -42,9 +42,7 @@ def get_model(opt):
     elif opt.head == 'R2D2':
         cls_head = ClassificationHead(base_learner='R2D2').cuda()
     elif opt.head == 'SVM':
-        cls_head = ClassificationHead(base_learner='MetaOptNet').cuda()
-    elif opt.head == 'SVM-WW':
-        cls_head = ClassificationHead(base_learner='SVM-WW').cuda()
+        cls_head = ClassificationHead(base_learner='SVM-CS').cuda()
     else:
         print ("Cannot recognize the classification head type")
         assert(False)
@@ -131,7 +129,10 @@ if __name__ == '__main__':
         emb_query = embedding_net(data_query.reshape([-1] + list(data_query.shape[-3:])))
         emb_query = emb_query.reshape(1, n_query, -1)
 
-        logits = cls_head(emb_query, emb_support, labels_support, opt.way, opt.shot)
+        if opt.head == 'SVM':
+            logits = cls_head(emb_query, emb_support, labels_support, opt.way, opt.shot, maxIter=3)
+        else:
+            logits = cls_head(emb_query, emb_support, labels_support, opt.way, opt.shot)
 
         acc = count_accuracy(logits.reshape(-1, opt.way), labels_query.reshape(-1))
         test_accuracies.append(acc)
