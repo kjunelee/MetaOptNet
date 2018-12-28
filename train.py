@@ -16,6 +16,23 @@ from models.ResNet12_embedding import resnet12
 
 from utils import set_gpu, Timer, count_accuracy, check_dir, log
 
+def one_hot(indices, depth):
+    """
+    Returns a one-hot tensor.
+    This is a PyTorch equivalent of Tensorflow's tf.one_hot.
+        
+    Parameters:
+      indices:  a (n_batch, m) Tensor or (m) Tensor.
+      depth: a scalar. Represents the depth of the one hot dimension.
+    Returns: a (n_batch, m, depth) Tensor or (m, depth) Tensor.
+    """
+
+    encoded_indicies = torch.zeros(indices.size() + torch.Size([depth])).cuda()
+    index = indices.view(indices.size()+torch.Size([1]))
+    encoded_indicies = encoded_indicies.scatter_(1,index,1)
+    
+    return encoded_indicies
+
 def get_model(options):
     # Choose the embedding network
     if options.network == 'ProtoNet':
@@ -38,7 +55,7 @@ def get_model(options):
     elif options.head == 'R2D2':
         cls_head = ClassificationHead(base_learner='R2D2').cuda()
     elif options.head == 'SVM':
-        cls_head = ClassificationHead(base_learner='SVM-WW').cuda()
+        cls_head = ClassificationHead(base_learner='SVM-CS').cuda()
     else:
         print ("Cannot recognize the dataset type")
         assert(False)
@@ -69,13 +86,13 @@ if __name__ == '__main__':
                             help='number of training epochs')
     parser.add_argument('--save-epoch', type=int, default=10,
                             help='frequency of model saving')
-    parser.add_argument('--train-shot', type=int, default=10,
+    parser.add_argument('--train-shot', type=int, default=15,
                             help='number of support examples per training class')
     parser.add_argument('--val-shot', type=int, default=5,
                             help='number of support examples per validation class')
-    parser.add_argument('--query', type=int, default=6,
+    parser.add_argument('--train-query', type=int, default=6,
                             help='number of query examples per training class')
-    parser.add_argument('--val-episode', type=int, default=1000,
+    parser.add_argument('--val-episode', type=int, default=2000,
                             help='number of episodes per validation')
     parser.add_argument('--val-query', type=int, default=15,
                             help='number of query examples per validation class')
@@ -93,6 +110,9 @@ if __name__ == '__main__':
                             help='choose which classification head to use. miniImageNet, tieredImageNet')
     parser.add_argument('--episodes-per-batch', type=int, default=8,
                             help='number of episodes per batch')
+    parser.add_argument('--eps', type=float, default=0.1,
+                            help='epsilon of label smoothing')
+
     opt = parser.parse_args()
     
     (dataset_train, dataset_val, data_loader) = get_dataset(opt)
@@ -103,7 +123,7 @@ if __name__ == '__main__':
         nKnovel=opt.train_way,
         nKbase=0,
         nExemplars=opt.train_shot, # num training examples per novel category
-        nTestNovel=opt.train_way * opt.query, # num test examples for all the novel categories
+        nTestNovel=opt.train_way * opt.train_query, # num test examples for all the novel categories
         nTestBase=0, # num test examples for all the base categories
         batch_size=opt.episodes_per_batch,
         num_workers=4,
@@ -119,7 +139,7 @@ if __name__ == '__main__':
         nTestBase=0, # num test examples for all the base categories
         batch_size=1,
         num_workers=0,
-        epoch_size=2000, # num of batches per epoch
+        epoch_size=1 * opt.val_episode, # num of batches per epoch
     )
 
     set_gpu(opt.gpu)
@@ -128,13 +148,6 @@ if __name__ == '__main__':
     
     log_file_path = os.path.join(opt.save_path, "train_log.txt")
     log(log_file_path, str(vars(opt)))
-
-    global_epoch = 0
-    def init_fn(worker_id):
-        num_workers = 4
-        torch.manual_seed(num_workers * global_epoch + worker_id)
-        random.seed(num_workers * global_epoch + worker_id)
-
 
     (embedding_net, cls_head) = get_model(opt)
     
@@ -170,18 +183,24 @@ if __name__ == '__main__':
         for i, batch in enumerate(tqdm(dloader_train(epoch)), 1):
             data_support, labels_support, data_query, labels_query, _, _ = [x.cuda() for x in batch]
 
-            n_support = opt.train_way * opt.train_shot
-            n_query = opt.train_way * opt.query
+            train_n_support = opt.train_way * opt.train_shot
+            train_n_query = opt.train_way * opt.train_query
 
             emb_support = embedding_net(data_support.reshape([-1] + list(data_support.shape[-3:])))
-            emb_support = emb_support.reshape(opt.episodes_per_batch, opt.train_way * opt.train_shot, -1)
+            emb_support = emb_support.reshape(opt.episodes_per_batch, train_n_support, -1)
             
             emb_query = embedding_net(data_query.reshape([-1] + list(data_query.shape[-3:])))
-            emb_query = emb_query.reshape(opt.episodes_per_batch, opt.train_way * opt.query, -1)
+            emb_query = emb_query.reshape(opt.episodes_per_batch, train_n_query, -1)
             
             logit_query = cls_head(emb_query, emb_support, labels_support, opt.train_way, opt.train_shot)
 
-            loss = x_entropy(logit_query.reshape(-1, opt.train_way), labels_query.reshape(-1))
+            smoothed_one_hot = one_hot(labels_query.reshape(-1), opt.train_way)
+            smoothed_one_hot = smoothed_one_hot * (1 - opt.eps) + (1 - smoothed_one_hot) * opt.eps / (opt.train_way - 1)
+
+            log_prb = F.log_softmax(logit_query.reshape(-1, opt.train_way), dim=1)
+            loss = -(smoothed_one_hot * log_prb).sum(dim=1)
+            loss = loss.mean()
+            
             acc = count_accuracy(logit_query.reshape(-1, opt.train_way), labels_query.reshape(-1))
             
             train_accuracies.append(acc.item())
@@ -205,13 +224,13 @@ if __name__ == '__main__':
         for i, batch in enumerate(tqdm(dloader_val(epoch)), 1):
             data_support, labels_support, data_query, labels_query, _, _ = [x.cuda() for x in batch]
 
-            n_support = opt.test_way * opt.val_shot
-            n_query = opt.test_way * opt.val_query
+            test_n_support = opt.test_way * opt.val_shot
+            test_n_query = opt.test_way * opt.val_query
 
             emb_support = embedding_net(data_support.reshape([-1] + list(data_support.shape[-3:])))
-            emb_support = emb_support.reshape(1, n_support, -1)
+            emb_support = emb_support.reshape(1, test_n_support, -1)
             emb_query = embedding_net(data_query.reshape([-1] + list(data_query.shape[-3:])))
-            emb_query = emb_query.reshape(1, n_query, -1)
+            emb_query = emb_query.reshape(1, test_n_query, -1)
 
             logit_query = cls_head(emb_query, emb_support, labels_support, opt.test_way, opt.val_shot)
 
@@ -244,4 +263,3 @@ if __name__ == '__main__':
                        , os.path.join(opt.save_path, 'epoch_{}.pth'.format(epoch)))
 
         log(log_file_path, 'Elapsed Time: {}/{}\n'.format(timer.measure(), timer.measure(epoch / float(opt.num_epoch))))
-        global_epoch = epoch + 1
