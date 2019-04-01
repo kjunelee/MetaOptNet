@@ -5,6 +5,9 @@ This repository contains the code for the paper:
 <br>
 Kwonjoon Lee, [Subhransu Maji](https://people.cs.umass.edu/~smaji/), Avinash Ravichandran, [Stefano Soatto](http://web.cs.ucla.edu/~soatto/)   
 CVPR 2019 (**Oral**)
+<p align='center'>
+  <img src='algorithm.png' width="400px">
+</p>
 
 ### Introduction
 
