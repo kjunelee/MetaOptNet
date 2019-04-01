@@ -1,4 +1,4 @@
-# Meta-learning with differentiable convex optimization
+# Meta-Learning with Differentiable Convex Optimization
 This repository contains the code for the paper:
 <br>
 **Meta-Learning with Differentiable Convex Optimization**
