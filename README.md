@@ -1,5 +1,30 @@
 # Meta-learning with differentiable convex optimization
-The following are the miniImageNet few-shot accuracies of ProtoNet (Snell et al., NIPS 2017), Meta-learning with differentiable closed-form solvers — R2D2 (Bertinetto et al., arXiv 2018), and MetaOptNet (ours) ran on our codebase.
+This repository contains the code for the paper:
+<br>
+[**Meta-Learning with Differentiable Convex Optimization**]
+<br>
+Kwonjoon Lee, [Subhransu Maji](https://people.cs.umass.edu/~smaji/), Avinash Ravichandran, [Stefano Soatto](http://web.cs.ucla.edu/~soatto/)   
+CVPR 2019 (**Oral**)
+
+### Introduction
+
+Many meta-learning approaches for few-shot learning rely on simple base learners such as nearest-neighbor classifiers. However, even in the few-shot regime, discriminatively trained linear predictors can offer better generalization. We propose to use these predictors as base learners to learn representations for few-shot learning and show they offer better tradeoffs between feature size and performance across a range of few-shot recognition benchmarks. Our objective is to learn feature embeddings that generalize well under a linear classification rule for novel categories. To efficiently solve the objective, we exploit two properties of linear classifiers: implicit differentiation of the optimality conditions of the convex problem and the dual formulation of the optimization problem. This allows us to use high-dimensional embeddings with improved generalization at a modest increase in computational overhead. Our approach, named MetaOptNet, achieves state-of-the-art performance on miniImageNet, tieredImageNet, CIFAR-FS and FC100 few-shot learning benchmarks.
+
+### Citation
+
+If you use this code for your research, please cite our paper:
+```
+@inproceedings{lee2019meta,
+  title={Meta-Learning with Differentiable Convex Optimization},
+  author={Kwonjoon Lee and Subhransu Maji and Avinash Ravichandran and Stefano Soatto},
+  booktitle={CVPR},
+  year={2019}
+}
+```
+
+### Acknowledgments
+
+This code is based on the implementations of [**Prototypical Networks**](https://github.com/cyvius96/prototypical-network-pytorch) and [**Dynamic Few-Shot Visual Learning without Forgetting**](https://github.com/gidariss/FewShotWithoutForgetting).
 
 miniImageNet 5-way accuracies
                                                                              
