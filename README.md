@@ -26,7 +26,7 @@ If you use this code for your research, please cite our paper:
 ```
 
 ## Dependencies
-* Python 2.7+
+* Python 2.7+ (not tested on Python 3)
 * [PyTorch 0.4.0+](http://pytorch.org)
 * [qpth 0.0.10+](https://github.com/locuslab/qpth)
 * [tqdm](https://github.com/tqdm/tqdm)
@@ -35,14 +35,25 @@ If you use this code for your research, please cite our paper:
 
 ### Installation
 
-1. Clone this repository
+1. Clone this repository:
     ```bash
     git clone https://github.com/kjunelee/MetaOptNet.git
     cd MetaOptNet
     ```
-2. Download and decompress dataset files
+2. Download and decompress dataset files: [**miniImageNet**](https://mega.nz/#!rx0wGQyS!96sFlAr6yyv-9QQPCm5OBFbOm4XSD0t-HlmGaT5GaiE) (courtesy of [**Spyros Gidaris**](https://github.com/gidariss/FewShotWithoutForgetting)), [**tieredImageNet**](https://drive.google.com/open?id=1nVGCTd9ttULRXFezh4xILQ9lUkg0WZCG), FC100 (coming soon), CIFAR-FS (coming soon)
 
-[**miniImageNet**](https://mega.nz/#!rx0wGQyS!96sFlAr6yyv-9QQPCm5OBFbOm4XSD0t-HlmGaT5GaiE) (courtesy of [**Spyros Gidaris**](https://github.com/gidariss/FewShotWithoutForgetting)), [**tieredImageNet**](https://drive.google.com/open?id=1nVGCTd9ttULRXFezh4xILQ9lUkg0WZCG)
+3. For each dataset loader, specify the path to the directory. For example, in MetaOptNet/data/mini_imagenet.py line 30:
+    ```python
+    _MINI_IMAGENET_DATASET_DIR = 'path/to/miniImageNet'
+    ```
+
+### Training
+1. To train MetaOptNet-SVM on 5-way miniImageNet few-shot benchmark:
+    ```bash
+    python train.py --gpu 0,1,2,3 --save-path "./experiments/miniImageNet_MetaOptNet_SVM" --train-shot 15 --head SVM --network ResNet
+    ```
+    As shown in Figure 2, of our paper, we can meta-train the embedding once with a high shot for all meta-testing shots. We don't need to meta-train with all possible shots unlike in Prototypical Networks.
+2. You can experiment with varying base learners by changing '--head' argument to ProtoNet or Ridge. Also, you can change the backbone architecture to vanilla 4-layer conv net by setting '--network' argument to ProtoNet.
 
 ## Acknowledgments
 
