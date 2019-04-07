@@ -31,6 +31,16 @@ If you use this code for your research, please cite our paper:
 * [qpth 0.0.10+](https://github.com/locuslab/qpth)
 * [tqdm](https://github.com/tqdm/tqdm)
 
+## Usage
+
+### Installation
+
+1. Clone this repository
+    ```bash
+    git clone https://github.com/kjunelee/MetaOptNet.git
+    cd MetaOptNet
+    ```
+
 
 ## Acknowledgments
 
