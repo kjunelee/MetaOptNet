@@ -47,48 +47,29 @@ If you use this code for your research, please cite our paper:
     _MINI_IMAGENET_DATASET_DIR = 'path/to/miniImageNet'
     ```
 
-### Training
+### Meta-training
 1. To train MetaOptNet-SVM on 5-way miniImageNet few-shot benchmark:
     ```bash
     python train.py --gpu 0,1,2,3 --save-path "./experiments/miniImageNet_MetaOptNet_SVM" --train-shot 15 \
-    --head SVM --network ResNet
+    --head SVM --network ResNet --dataset miniImageNet
     ```
-    As shown in Figure 2, of our paper, we can meta-train the embedding once with a high shot for all meta-testing shots. We don't need to meta-train with all possible shots unlike in Prototypical Networks.
+    As shown in Figure 2, of our paper, we can meta-train the embedding once with a high shot for all meta-testing shots. We don't need to meta-train with all possible meta-test shots unlike in Prototypical Networks.
 2. You can experiment with varying base learners by changing '--head' argument to ProtoNet or Ridge. Also, you can change the backbone architecture to vanilla 4-layer conv net by setting '--network' argument to ProtoNet.
+3. To train MetaOptNet-SVM on 5-way tieredImageNet few-shot benchmark:
+    ```bash
+    python train.py --gpu 0,1,2,3 --save-path "./experiments/tieredImageNet_MetaOptNet_SVM" --train-shot 10 \
+    --head SVM --network ResNet --dataset tieredImageNet
+    ```
+### Meta-testing
+1. To test MetaOptNet-SVM on 5-way miniImageNet 1-shot benchmark:
+```
+python test.py --gpu 0,1,2,3 --load ./experiments/miniImageNet_MetaOptNet_SVM/best_model.pth --episode 1000 --way 5 --shot 1 --query 15 --head SVM --network ResNet
+```
+2. Similarly, to test MetaOptNet-SVM on 5-way miniImageNet 5-shot benchmark:
+```
+python test.py --gpu 0,1,2,3 --load ./experiments/miniImageNet_MetaOptNet_SVM/best_model.pth --episode 1000 --way 5 --shot 5 --query 15 --head SVM --network ResNet
+```
 
 ## Acknowledgments
 
 This code is based on the implementations of [**Prototypical Networks**](https://github.com/cyvius96/prototypical-network-pytorch),  [**Dynamic Few-Shot Visual Learning without Forgetting**](https://github.com/gidariss/FewShotWithoutForgetting), and [**DropBlock**](https://github.com/miguelvr/dropblock).
-
-
-Prototypical Networks 1-shot
-```
-python train.py --gpu 0 --save-path "./experiments/exp_proto_1_shot" --train-way 5 --shot 1 --query 6 --head ProtoNet --network ProtoNet --episodes-per-batch 8
-python test.py --gpu 0 --load ./experiments/exp_proto_1_shot/best_model.pth --episode 1000 --way 5 --shot 1 --query 15 --head ProtoNet --network ProtoNet
-```
-Prototypical Networks 5-shot
-```
-python train.py --gpu 0 --save-path "./experiments/exp_proto_5_shot" --train-way 5 --shot 5 --query 6 --head ProtoNet --network ProtoNet --episodes-per-batch 8
-python test.py --gpu 0 --load ./experiments/exp_proto_5_shot/best_model.pth --episode 1000 --way 5 --shot 5 --query 15 --head ProtoNet --network ProtoNet
-```
-R2D2 1-shot
-```
-python train.py --gpu 0 --save-path "./experiments/exp_R2D2_1_shot" --train-way 5 --shot 1 --query 6 --head R2D2 --network R2D2 --episodes-per-batch 8
-python test.py --gpu 0 --load ./experiments/exp_R2D2_1_shot/best_model.pth --episode 1000 --way 5 --shot 1 --query 15 --head R2D2 --network R2D2
-```
-
-R2D2 5-shot
-```
-python train.py --gpu 0 --save-path "./experiments/exp_R2D2_5_shot" --train-way 5 --shot 5 --query 6 --head R2D2 --network R2D2 --episodes-per-batch 8
-python test.py --gpu 0 --load ./experiments/exp_R2D2_5_shot/best_model.pth --episode 1000 --way 5 --shot 5 --query 15 --head R2D2 --network R2D2
-```
-MetaOptNet 1-shot
-```
-python train.py --gpu 0 --save-path "./experiments/exp_MetaOptNet_1_shot" --train-way 20 --shot 1 --query 6 --head SVM --network ResNet --episodes-per-batch 2
-python test.py --gpu 0 --load ./experiments/exp_MetaOptNet_1_shot/best_model.pth --episode 1000 --way 5 --shot 1 --query 15 --head SVM --network ResNet
-```
-MetaOptNet 5-shot
-```
-python train.py --gpu 0 --save-path "./experiments/exp_MetaOptNet_5_shot" --train-way 15 --shot 5 --query 6 --head SVM --network ResNet --episodes-per-batch 1
-python test.py --gpu 0 --load ./experiments/exp_MetaOptNet_5_shot/best_model.pth --episode 1000 --way 5 --shot 5 --query 15 --head SVM --network ResNet
-```
