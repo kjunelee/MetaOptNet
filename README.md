@@ -9,15 +9,9 @@ CVPR 2019 (**Oral**)
   <img src='algorithm.png' width="800px">
 </p>
 
-### Introduction
+### Abstract
 
 Many meta-learning approaches for few-shot learning rely on simple base learners such as nearest-neighbor classifiers. However, even in the few-shot regime, discriminatively trained linear predictors can offer better generalization. We propose to use these predictors as base learners to learn representations for few-shot learning and show they offer better tradeoffs between feature size and performance across a range of few-shot recognition benchmarks. Our objective is to learn feature embeddings that generalize well under a linear classification rule for novel categories. To efficiently solve the objective, we exploit two properties of linear classifiers: implicit differentiation of the optimality conditions of the convex problem and the dual formulation of the optimization problem. This allows us to use high-dimensional embeddings with improved generalization at a modest increase in computational overhead. Our approach, named MetaOptNet, achieves state-of-the-art performance on miniImageNet, tieredImageNet, CIFAR-FS and FC100 few-shot learning benchmarks.
-
-## Dependencies
-* Python 2.7+
-* [PyTorch 0.4.0+](http://pytorch.org)
-* [qpth 0.0.10+](https://github.com/locuslab/qpth)
-* [tqdm](https://github.com/tqdm/tqdm)
 
 ### Citation
 
@@ -31,9 +25,16 @@ If you use this code for your research, please cite our paper:
 }
 ```
 
-### Acknowledgments
+## Dependencies
+* Python 2.7+
+* [PyTorch 0.4.0+](http://pytorch.org)
+* [qpth 0.0.10+](https://github.com/locuslab/qpth)
+* [tqdm](https://github.com/tqdm/tqdm)
 
-This code is based on the implementations of [**Prototypical Networks**](https://github.com/cyvius96/prototypical-network-pytorch) and [**Dynamic Few-Shot Visual Learning without Forgetting**](https://github.com/gidariss/FewShotWithoutForgetting).
+
+## Acknowledgments
+
+This code is based on the implementations of [**Prototypical Networks**](https://github.com/cyvius96/prototypical-network-pytorch),  [**Dynamic Few-Shot Visual Learning without Forgetting**](https://github.com/gidariss/FewShotWithoutForgetting), and [**DropBlock**](https://github.com/miguelvr/dropblock).
 
 
 Prototypical Networks 1-shot
