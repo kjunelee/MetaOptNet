@@ -40,7 +40,8 @@ If you use this code for your research, please cite our paper:
     git clone https://github.com/kjunelee/MetaOptNet.git
     cd MetaOptNet
     ```
-
+2. Download and decompress dataset files
+[**miniImageNet**](https://mega.nz/#!rx0wGQyS!96sFlAr6yyv-9QQPCm5OBFbOm4XSD0t-HlmGaT5GaiE) (courtesy of [**Spyros Gidaris**](https://github.com/gidariss/FewShotWithoutForgetting)), [**tieredImageNet**](https://drive.google.com/open?id=1nVGCTd9ttULRXFezh4xILQ9lUkg0WZCG)
 
 ## Acknowledgments
 
