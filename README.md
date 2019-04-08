@@ -48,26 +48,38 @@ If you use this code for your research, please cite our paper:
     ```
 
 ### Meta-training
-1. To train MetaOptNet-SVM on 5-way miniImageNet few-shot benchmark:
+1. To train MetaOptNet-SVM on 5-way miniImageNet benchmark:
     ```bash
     python train.py --gpu 0,1,2,3 --save-path "./experiments/miniImageNet_MetaOptNet_SVM" --train-shot 15 \
     --head SVM --network ResNet --dataset miniImageNet
     ```
     As shown in Figure 2, of our paper, we can meta-train the embedding once with a high shot for all meta-testing shots. We don't need to meta-train with all possible meta-test shots unlike in Prototypical Networks.
 2. You can experiment with varying base learners by changing '--head' argument to ProtoNet or Ridge. Also, you can change the backbone architecture to vanilla 4-layer conv net by setting '--network' argument to ProtoNet. For other arguments, please see MetaOptNet/train.py from lines 85 to 114.
-3. To train MetaOptNet-SVM on 5-way tieredImageNet few-shot benchmark:
+3. To train MetaOptNet-SVM on 5-way tieredImageNet benchmark:
     ```bash
     python train.py --gpu 0,1,2,3 --save-path "./experiments/tieredImageNet_MetaOptNet_SVM" --train-shot 10 \
     --head SVM --network ResNet --dataset tieredImageNet
     ```
+3. To train MetaOptNet-RR on 5-way CIFAR-FS benchmark:
+    ```bash
+    python train.py --gpu 0 --save-path "./experiments/CIFAR_FS_MetaOptNet_RR" --train-shot 5 \
+    --head Ridge --network ResNet --dataset CIFAR_FS
+    ```
+3. To train MetaOptNet-RR on 5-way FC100 benchmark:
+    ```bash
+    python train.py --gpu 0 --save-path "./experiments/FC100_MetaOptNet_RR" --train-shot 15 \
+    --head Ridge --network ResNet --dataset FC100
+    ```
 ### Meta-testing
 1. To test MetaOptNet-SVM on 5-way miniImageNet 1-shot benchmark:
 ```
-python test.py --gpu 0,1,2,3 --load ./experiments/miniImageNet_MetaOptNet_SVM/best_model.pth --episode 1000 --way 5 --shot 1 --query 15 --head SVM --network ResNet
+python test.py --gpu 0,1,2,3 --load ./experiments/miniImageNet_MetaOptNet_SVM/best_model.pth --episode 1000 \
+--way 5 --shot 1 --query 15 --head SVM --network ResNet
 ```
 2. Similarly, to test MetaOptNet-SVM on 5-way miniImageNet 5-shot benchmark:
 ```
-python test.py --gpu 0,1,2,3 --load ./experiments/miniImageNet_MetaOptNet_SVM/best_model.pth --episode 1000 --way 5 --shot 5 --query 15 --head SVM --network ResNet
+python test.py --gpu 0,1,2,3 --load ./experiments/miniImageNet_MetaOptNet_SVM/best_model.pth --episode 1000 \
+--way 5 --shot 5 --query 15 --head SVM --network ResNet
 ```
 
 ## Acknowledgments
