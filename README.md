@@ -40,7 +40,7 @@ If you use this code for your research, please cite our paper:
     git clone https://github.com/kjunelee/MetaOptNet.git
     cd MetaOptNet
     ```
-2. Download and decompress dataset files: [**miniImageNet**](https://mega.nz/#!rx0wGQyS!96sFlAr6yyv-9QQPCm5OBFbOm4XSD0t-HlmGaT5GaiE) (courtesy of [**Spyros Gidaris**](https://github.com/gidariss/FewShotWithoutForgetting)), [**tieredImageNet**](https://drive.google.com/open?id=1nVGCTd9ttULRXFezh4xILQ9lUkg0WZCG), FC100 (coming soon), CIFAR-FS (coming soon)
+2. Download and decompress dataset files: [**miniImageNet**](https://mega.nz/#!rx0wGQyS!96sFlAr6yyv-9QQPCm5OBFbOm4XSD0t-HlmGaT5GaiE) (courtesy of [**Spyros Gidaris**](https://github.com/gidariss/FewShotWithoutForgetting)), [**tieredImageNet**](https://drive.google.com/open?id=1nVGCTd9ttULRXFezh4xILQ9lUkg0WZCG), [**FC100**](https://drive.google.com/a/eng.ucsd.edu/file/d/1wkXQjvLYr96m1LaPBF6a_LgPCqTJqlpA/view?usp=drive_web), [**CIFAR-FS**](https://drive.google.com/a/eng.ucsd.edu/file/d/1e1q1YsWAm_26EEFeqChNfxz6UyNBQkJV/view?usp=drive_web)
 
 3. For each dataset loader, specify the path to the directory. For example, in MetaOptNet/data/mini_imagenet.py line 30:
     ```python
