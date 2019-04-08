@@ -74,12 +74,12 @@ If you use this code for your research, please cite our paper:
 1. To test MetaOptNet-SVM on 5-way miniImageNet 1-shot benchmark:
 ```
 python test.py --gpu 0,1,2,3 --load ./experiments/miniImageNet_MetaOptNet_SVM/best_model.pth --episode 1000 \
---way 5 --shot 1 --query 15 --head SVM --network ResNet
+--way 5 --shot 1 --query 15 --head SVM --network ResNet --dataset miniImageNet
 ```
 2. Similarly, to test MetaOptNet-SVM on 5-way miniImageNet 5-shot benchmark:
 ```
 python test.py --gpu 0,1,2,3 --load ./experiments/miniImageNet_MetaOptNet_SVM/best_model.pth --episode 1000 \
---way 5 --shot 5 --query 15 --head SVM --network ResNet
+--way 5 --shot 5 --query 15 --head SVM --network ResNet --dataset miniImageNet
 ```
 
 ## Acknowledgments
