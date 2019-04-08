@@ -40,9 +40,11 @@ def get_model(options):
     elif options.network == 'R2D2':
         network = R2D2Embedding().cuda()
     elif options.network == 'ResNet':
-        network = resnet12(avg_pool=False, drop_rate=0.1).cuda()
-        network = torch.nn.DataParallel(network, device_ids=[0, 1, 2, 3])
-        #network = torch.nn.DataParallel(network, device_ids=[0, 1, 2])
+        if options.dataset == 'miniImageNet' or options.dataset == 'tieredImageNet':
+            network = resnet12(avg_pool=False, drop_rate=0.1, dropblock_size=5).cuda()
+            network = torch.nn.DataParallel(network, device_ids=[0, 1, 2, 3])
+        else:
+            network = resnet12(avg_pool=False, drop_rate=0.1, dropblock_size=2).cuda()
     else:
         print ("Cannot recognize the network type")
         assert(False)
@@ -74,8 +76,18 @@ def get_dataset(options):
         dataset_train = tieredImageNet(phase='train')
         dataset_val = tieredImageNet(phase='val')
         data_loader = FewShotDataloader
+    elif options.dataset == 'CIFAR_FS':
+        from data.CIFAR_FS import CIFAR_FS, FewShotDataloader
+        dataset_train = CIFAR_FS(phase='train')
+        dataset_val = CIFAR_FS(phase='val')
+        data_loader = FewShotDataloader
+    elif options.dataset == 'FC100':
+        from data.FC100 import FC100, FewShotDataloader
+        dataset_train = FC100(phase='train')
+        dataset_val = FC100(phase='val')
+        data_loader = FewShotDataloader
     else:
-        print ("Cannot recognize the network type")
+        print ("Cannot recognize the dataset type")
         assert(False)
         
     return (dataset_train, dataset_val, data_loader)
@@ -107,7 +119,7 @@ if __name__ == '__main__':
     parser.add_argument('--head', type=str, default='ProtoNet',
                             help='choose which classification head to use. ProtoNet, Ridge, R2D2, SVM')
     parser.add_argument('--dataset', type=str, default='miniImageNet',
-                            help='choose which classification head to use. miniImageNet, tieredImageNet')
+                            help='choose which classification head to use. miniImageNet, tieredImageNet, CIFAR_FS, FC100')
     parser.add_argument('--episodes-per-batch', type=int, default=8,
                             help='number of episodes per batch')
     parser.add_argument('--eps', type=float, default=0.1,

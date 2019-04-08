@@ -91,34 +91,31 @@ def MetaOptNetHead_Ridge(query, support, support_labels, n_way, n_shot, lambda_r
     #Here we solve the dual problem:
     #Note that the classes are indexed by m & samples are indexed by i.
     #min_{\alpha}  0.5 \sum_m ||w_m(\alpha)||^2 + \sum_i \sum_m e^m_i alpha^m_i
-    #s.t.  \alpha^m_i <= C^m_i \forall m,i , \sum_m \alpha^m_i=0 \forall i
 
     #where w_m(\alpha) = \sum_i \alpha^m_i x_i,
-    #and C^m_i = C if m  = y_i,
-    #C^m_i = 0 if m != y_i.
-    #This borrows the notation of liblinear.
     
     #\alpha is an (n_support, n_way) matrix
     kernel_matrix = computeGramMatrix(support, support)
     kernel_matrix += lambda_reg * torch.eye(n_support).expand(tasks_per_batch, n_support, n_support).cuda()
-    id_matrix_0 = torch.eye(n_way).expand(tasks_per_batch, n_way, n_way).cuda()
-    block_kernel_matrix = batched_kronecker(kernel_matrix, id_matrix_0)
+
+    block_kernel_matrix = kernel_matrix.repeat(n_way, 1, 1) #(n_way * tasks_per_batch, n_support, n_support)
     
-    support_labels_one_hot = one_hot(support_labels.view(tasks_per_batch * n_support), n_way) # (tasks_per_batch * n_support, n_support)
-    support_labels_one_hot = support_labels_one_hot.view(tasks_per_batch, n_support, n_way)
-    support_labels_one_hot = support_labels_one_hot.reshape(tasks_per_batch, n_support * n_way)
+    support_labels_one_hot = one_hot(support_labels.view(tasks_per_batch * n_support), n_way) # (tasks_per_batch * n_support, n_way)
+    support_labels_one_hot = support_labels_one_hot.transpose(0, 1) # (n_way, tasks_per_batch * n_support)
+    support_labels_one_hot = support_labels_one_hot.reshape(n_way * tasks_per_batch, n_support)     # (n_way*tasks_per_batch, n_support)
     
     G = block_kernel_matrix
     e = -2.0 * support_labels_one_hot
     
     #This is a fake inequlity constraint as qpth does not support QP without an inequality constraint.
-    id_matrix_1 = torch.zeros(tasks_per_batch, n_way * n_support, n_way * n_support)
+    id_matrix_1 = torch.zeros(tasks_per_batch*n_way, n_support, n_support)
     C = Variable(id_matrix_1)
-    h = Variable(torch.zeros((tasks_per_batch, n_support * n_way)))
+    h = Variable(torch.zeros((tasks_per_batch*n_way, n_support)))
     dummy = Variable(torch.Tensor()).cuda()      # We want to ignore the equality constraint.
 
     if double_precision:
         G, e, C, h = [x.double().cuda() for x in [G, e, C, h]]
+
     else:
         G, e, C, h = [x.float().cuda() for x in [G, e, C, h]]
 
@@ -127,7 +124,14 @@ def MetaOptNetHead_Ridge(query, support, support_labels, n_way, n_shot, lambda_r
     #                 subject to Cz <= h
     # We use detach() to prevent backpropagation to fixed variables.
     qp_sol = QPFunction(verbose=False)(G, e.detach(), C.detach(), h.detach(), dummy.detach(), dummy.detach())
+    #qp_sol = QPFunction(verbose=False)(G, e.detach(), dummy.detach(), dummy.detach(), dummy.detach(), dummy.detach())
 
+    #qp_sol (n_way*tasks_per_batch, n_support)
+    qp_sol = qp_sol.reshape(n_way, tasks_per_batch, n_support)
+    #qp_sol (n_way, tasks_per_batch, n_support)
+    qp_sol = qp_sol.permute(1, 2, 0)
+    #qp_sol (tasks_per_batch, n_support, n_way)
+    
     # Compute the classification score.
     compatibility = computeGramMatrix(support, query)
     compatibility = compatibility.float()
