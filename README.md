@@ -65,7 +65,7 @@ If you use this code for your research, please cite our paper:
     python train.py --gpu 0 --save-path "./experiments/CIFAR_FS_MetaOptNet_RR" --train-shot 5 \
     --head Ridge --network ResNet --dataset CIFAR_FS
     ```
-3. To train MetaOptNet-RR on 5-way FC100 benchmark:
+4. To train MetaOptNet-RR on 5-way FC100 benchmark:
     ```bash
     python train.py --gpu 0 --save-path "./experiments/FC100_MetaOptNet_RR" --train-shot 15 \
     --head Ridge --network ResNet --dataset FC100
