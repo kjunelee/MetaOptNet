@@ -338,7 +338,7 @@ class FewShotDataloader():
         Tnovel = []
         Exemplars = []
         assert((nTestNovel % nKnovel) == 0)
-        nEvalExamplesPerClass = nTestNovel / nKnovel
+        nEvalExamplesPerClass = int(nTestNovel / nKnovel)
 
         for Knovel_idx in range(len(Knovel)):
             imd_ids = self.sampleImageIdsFrom(
@@ -427,4 +427,4 @@ class FewShotDataloader():
         return self.get_iterator(epoch)
 
     def __len__(self):
-        return (self.epoch_size / self.batch_size)
+        return int(self.epoch_size / self.batch_size)
