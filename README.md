@@ -28,7 +28,7 @@ If you use this code for your research, please cite our paper:
 ## Dependencies
 * Python 2.7+ (not tested on Python 3)
 * [PyTorch 0.4.0+](http://pytorch.org)
-* [qpth 0.0.10+](https://github.com/locuslab/qpth)
+* [qpth 0.0.11+](https://github.com/locuslab/qpth)
 * [tqdm](https://github.com/tqdm/tqdm)
 
 ## Usage
