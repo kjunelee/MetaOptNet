@@ -1,0 +1,5 @@
+torch==1.0.1.post2
+torchvision==0.2.2.post2
+qpth==0.0.13
+torchnet
+tqdm
