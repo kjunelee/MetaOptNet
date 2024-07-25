@@ -1,4 +1,4 @@
-torch==1.0.1.post2
+torch==2.2.0
 torchvision==0.2.2.post2
 qpth==0.0.13
 torchnet
